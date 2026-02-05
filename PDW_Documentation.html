@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDW Simulator - Data Generation & Noise Addition</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }
+        h3 {
+            color: #7f8c8d;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .code-block {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+        .formula {
+            background-color: #e8f4f8;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .important {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .info {
+            color: #3498db;
+            font-weight: bold;
+        }
+        ul {
+            line-height: 1.8;
+        }
+        .toc {
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .toc a {
+            color: #2980b9;
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📡 PDW Simulator - Data Generation & Noise Addition</h1>
+        <p><strong>Complete Beginner's Guide</strong></p>
+
+        <div class="toc">
+            <h3>📑 Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">1. Overview</a></li>
+                <li><a href="#files">2. Important Files</a></li>
+                <li><a href="#data-generation">3. How Data is Generated</a></li>
+                <li><a href="#noise-addition">4. How Noise is Added</a></li>
+                <li><a href="#parameters">5. Noise Parameters</a></li>
+                <li><a href="#code-locations">6. Code Locations</a></li>
+                <li><a href="#examples">7. Examples</a></li>
+                <li><a href="#figures">8. Report Figures</a></li>
+            </ul>
+        </div>
+
+        <div id="overview" class="section">
+            <h2>1. 🎯 Overview</h2>
+            <p>This is a <strong>Pulse Descriptor Word (PDW) Simulator</strong> that simulates how radar systems work in the real world. It creates realistic radar data by:</p>
+            <ul>
+                <li>Simulating 5 radar emitters and 1 sensor receiver</li>
+                <li>Calculating true physical parameters (distance, angle, signal strength, etc.)</li>
+                <li>Adding realistic measurement noise to simulate real sensors</li>
+                <li>Exporting data to CSV for analysis</li>
+            </ul>
+        </div>
+
+        <div id="files" class="section">
+            <h2>2. 📂 Important Files</h2>
+            
+            <h3>Core Simulation Files:</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Purpose</th>
+                    <th>Key Functions</th>
+                </tr>
+                <tr>
+                    <td><code>src/pdw_simulator/main.py</code></td>
+                    <td>Main simulation engine</td>
+                    <td>run_simulation() (lines 66-283)</td>
+                </tr>
+                <tr>
+                    <td><code>src/pdw_simulator/sensor_properties.py</code></td>
+                    <td><span class="important">⭐ NOISE IS ADDED HERE!</span></td>
+                    <td>measure_amplitude(), measure_toa(), etc.</td>
+                </tr>
+                <tr>
+                    <td><code>src/pdw_simulator/models.py</code></td>
+                    <td>Radar & Sensor classes</td>
+                    <td>Radar class, Sensor class</td>
+                </tr>
+                <tr>
+                    <td><code>dataconfig.yaml</code></td>
+                    <td><span class="important">⭐ NOISE PARAMETERS HERE!</span></td>
+                    <td>Configuration for all parameters</td>
+                </tr>
+            </table>
+        </div>
+
+        <div id="data-generation" class="section">
+            <h2>3. 🔄 How Data is Generated</h2>
+            
+            <h3>Phase 1: Configuration & Initialization</h3>
+            <ol>
+                <li>Load settings from <code>dataconfig.yaml</code></li>
+                <li>Create 5 radars with properties (position, power, frequency, etc.)</li>
+                <li>Create 1 sensor with detection and error properties</li>
+                <li>Calculate trajectories (where they move over time)</li>
+                <li>Generate pulse times (when radars emit pulses)</li>
+            </ol>
+
+            <h3>Phase 2: Simulation Loop</h3>
+            <p>For each pulse emitted by each radar:</p>
+            
+            <div class="highlight">
+                <strong>Step 1: Calculate TRUE values (perfect physics, no noise)</strong>
+                <div class="formula">
+                    Distance: d = √[(x_sensor - x_radar)² + (y_sensor - y_radar)²]<br>
+                    Angle: θ = arctan2(y_sensor - y_radar, x_sensor - x_radar)<br>
+                    Amplitude: P = P₀ + G(θ) - 20·log₁₀(d)<br>
+                    TOA: t = pulse_time + d/c<br>
+                    Frequency: f = f₀ + Δf_doppler
+                </div>
+            </div>
+
+            <div class="highlight">
+                <strong>Step 2: Detection Check (Probabilistic)</strong>
+                <table>
+                    <tr>
+                        <th>Signal Strength</th>
+                        <th>Detection Probability</th>
+                    </tr>
+                    <tr>
+                        <td>&gt; -65 dBm</td>
+                        <td class="success">100% (always detected)</td>
+                    </tr>
+                    <tr>
+                        <td>-65 to -70 dBm</td>
+                        <td class="success">100%</td>
+                    </tr>
+                    <tr>
+                        <td>-70 to -75 dBm</td>
+                        <td class="info">90%</td>
+                    </tr>
+                    <tr>
+                        <td>-75 to -80 dBm</td>
+                        <td class="info">70%</td>
+                    </tr>
+                    <tr>
+                        <td>&lt; -80 dBm</td>
+                        <td class="important">50%</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="highlight">
+                <strong>Step 3: Add Noise (if detected)</strong>
+                <p>This is where realistic measurement errors are added!</p>
+            </div>
+
+            <h3>Phase 3: Export</h3>
+            <p>Save all detected and measured pulses to CSV file with columns:</p>
+            <ul>
+                <li>Name (radar identifier)</li>
+                <li>Freq(MHz)</li>
+                <li>PW(µs) - Pulse Width</li>
+                <li>Azimuth(°)</li>
+                <li>Power(dBm)</li>
+                <li>PRI - Pulse Repetition Interval</li>
+            </ul>
+        </div>
+
+        <div id="noise-addition" class="section">
+            <h2>4. 🔊 How Noise is Added</h2>
+            
+            <div class="highlight">
+                <h3>Key Concept: Two Types of Errors</h3>
+                <p>Every measurement has TWO error components added:</p>
+            </div>
+
+            <h3>A) Systematic Error (ε_sys) - Predictable</h3>
+            <table>
+                <tr>
+                    <th>Type</th>
+                    <th>Formula</th>
+                    <th>Example Use</th>
+                </tr>
+                <tr>
+                    <td>Constant</td>
+                    <td>ε(t) = C</td>
+                    <td>Fixed calibration offset</td>
+                </tr>
+                <tr>
+                    <td>Linear</td>
+                    <td>ε(t) = C + R·t</td>
+                    <td>Sensor drift over time</td>
+                </tr>
+                <tr>
+                    <td>Sinusoidal</td>
+                    <td>ε(t) = A·sin(2πf·t + φ)</td>
+                    <td>Periodic interference</td>
+                </tr>
+            </table>
+
+            <h3>B) Arbitrary Error (ε_arb) - Random</h3>
+            <table>
+                <tr>
+                    <th>Type</th>
+                    <th>Distribution</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>Gaussian</td>
+                    <td>ε ~ N(0, σ²)</td>
+                    <td><strong>Most common!</strong> Bell curve distribution</td>
+                </tr>
+                <tr>
+                    <td>Uniform</td>
+                    <td>ε ~ U(-a, +a)</td>
+                    <td>Equal probability across range</td>
+                </tr>
+            </table>
+
+            <div class="highlight">
+                <h3>Measurement Equation:</h3>
+                <div class="formula" style="font-size: 1.2em; text-align: center;">
+                    <strong>Measured Value = True Value + ε_sys + ε_arb</strong>
+                </div>
+            </div>
+
+            <h3>Example: Amplitude Measurement</h3>
+            <div class="code-block">
+TRUE amplitude (perfect)     = 35 dBm
++ Systematic error           = 0 dBm (configured as constant 0)
++ Arbitrary error            = +1.2 dBm (random from Gaussian, σ=2 dBm)
+= MEASURED amplitude         = 36.2 dBm
+
+Next measurement might be:
+35 + 0 + (-0.8) = 34.2 dBm  (different random value!)
+            </div>
+        </div>
+
+        <div id="parameters" class="section">
+            <h2>5. 📊 Noise Parameters (from dataconfig.yaml)</h2>
+            
+            <table>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Systematic Error</th>
+                    <th>Arbitrary Error</th>
+                    <th>Meaning</th>
+                </tr>
+                <tr>
+                    <td><strong>Amplitude</strong></td>
+                    <td>Constant: 0 dBm</td>
+                    <td>Gaussian: σ = 2 dBm</td>
+                    <td>±2 dBm random noise</td>
+                </tr>
+                <tr>
+                    <td><strong>TOA</strong></td>
+                    <td>Constant: 0 s</td>
+                    <td>Gaussian: σ = 5 ns</td>
+                    <td>±5 nanosecond timing jitter</td>
+                </tr>
+                <tr>
+                    <td><strong>Frequency</strong></td>
+                    <td>Constant: 0 Hz</td>
+                    <td>Gaussian: σ = 1%</td>
+                    <td>±1% frequency error (~±15 MHz for 1.5 GHz)</td>
+                </tr>
+                <tr>
+                    <td><strong>Pulse Width</strong></td>
+                    <td>Constant: 0 s</td>
+                    <td>Gaussian: σ = 25 ns</td>
+                    <td>±25 nanosecond width error</td>
+                </tr>
+                <tr>
+                    <td><strong>AOA</strong></td>
+                    <td>Constant: 0°</td>
+                    <td>Gaussian: σ = 3.5°</td>
+                    <td>±3.5 degree angle error</td>
+                </tr>
+            </table>
+
+            <h3>Understanding Gaussian Distribution (68-95-99.7 Rule)</h3>
+            <ul>
+                <li><strong>68%</strong> of measurements fall within <strong>±1σ</strong> of true value</li>
+                <li><strong>95%</strong> of measurements fall within <strong>±2σ</strong> of true value</li>
+                <li><strong>99.7%</strong> of measurements fall within <strong>±3σ</strong> of true value</li>
+            </ul>
+
+            <p><strong>Example for Amplitude (σ = 2 dBm):</strong></p>
+            <ul>
+                <li>68% of measurements: within ±2 dBm</li>
+                <li>95% of measurements: within ±4 dBm</li>
+                <li>99.7% of measurements: within ±6 dBm</li>
+            </ul>
+        </div>
+
+        <div id="code-locations" class="section">
+            <h2>6. 💻 Code Locations</h2>
+            
+            <h3>Where Noise is Added:</h3>
+            <p><strong>File:</strong> <code>src/pdw_simulator/sensor_properties.py</code></p>
+            
+            <table>
+                <tr>
+                    <th>Function</th>
+                    <th>Lines</th>
+                    <th>What it does</th>
+                </tr>
+                <tr>
+                    <td><code>measure_amplitude()</code></td>
+                    <td>126-157</td>
+                    <td>Adds ±2 dBm Gaussian noise to amplitude</td>
+                </tr>
+                <tr>
+                    <td><code>measure_toa()</code></td>
+                    <td>214-246</td>
+                    <td>Adds ±5 ns Gaussian noise to TOA</td>
+                </tr>
+                <tr>
+                    <td><code>measure_frequency()</code></td>
+                    <td>249-284</td>
+                    <td>Adds ±1% Gaussian noise to frequency</td>
+                </tr>
+                <tr>
+                    <td><code>measure_pulse_width()</code></td>
+                    <td>287-317</td>
+                    <td>Adds ±25 ns Gaussian noise to pulse width</td>
+                </tr>
+                <tr>
+                    <td><code>measure_aoa()</code></td>
+                    <td>320-344</td>
+                    <td>Adds ±3.5° Gaussian noise to AOA</td>
+                </tr>
+            </table>
+
+            <h3>Where Noise Parameters are Configured:</h3>
+            <p><strong>File:</strong> <code>dataconfig.yaml</code> (lines 156-190)</p>
+        </div>
+
+        <div id="examples" class="section">
+            <h2>7. 📝 Complete Example: One Pulse</h2>
+            
+            <div class="code-block">
+<strong>1. PULSE EMISSION</strong>
+   Radar1 emits a pulse at time 0.0006s
+
+<strong>2. CALCULATE TRUE VALUES</strong>
+   Radar position: [100, 200] meters
+   Sensor position: [2000, 2000] meters
+   
+   Distance = √[(2000-100)² + (2000-200)²] = 2,613 meters
+   Angle = arctan2(1800, 1900) = 43.4°
+   Amplitude = 40 dBm (power) - 68.3 dB (path loss) + gain = -68 dBm
+   TOA = 0.0006s + (2613m / 299792458 m/s) = 0.000608716s
+   Frequency = 1500 MHz + Doppler shift
+   Pulse Width = 100 microseconds
+   AOA = 43.4°
+
+<strong>3. DETECTION CHECK</strong>
+   Amplitude = -68 dBm
+   Check: -68 dBm > -70 dBm threshold? Yes
+   Detection probability: 90%
+   Random roll: 0.35 < 0.90 → <span class="success">DETECTED!</span>
+
+<strong>4. ADD NOISE</strong>
+   Amplitude:    -68 + 0 + 1.2 (random) = -66.8 dBm
+   TOA:          0.000608716 + 0 + 0.0000000023 = 0.000608718s
+   Frequency:    1500 + 0 + 8.5 (random) = 1508.5 MHz
+   Pulse Width:  100.000 + 0 + 0.018 (random) = 100.018 µs
+   AOA:          43.4 + 0 + 2.3 (random) = 45.7°
+
+<strong>5. SAVE TO CSV</strong>
+   Radar1,1508.5,100.018,45.7,0.0,-66.8,0.0006
+            </div>
+        </div>
+
+        <div id="figures" class="section">
+            <h2>8. 📊 Report Figures</h2>
+            
+            <h3>Figure 1: PDW Simulation Workflow</h3>
+            <img src="Figure1_PDW_Workflow.png" alt="PDW Simulation Workflow">
+            <p><em>Complete workflow showing Configuration, Simulation Loop, Noise Addition, and Output phases.</em></p>
+
+            <h3>Figure 2: Sensor Measurement Error Model</h3>
+            <img src="Figure2_Error_Model.png" alt="Error Model">
+            <p><em>Error model architecture showing systematic and arbitrary error components.</em></p>
+        </div>
+
+        <div class="section" style="background-color: #d4edda; border-left: 4px solid #28a745;">
+            <h2>✅ Summary</h2>
+            <ul>
+                <li><strong>Data Generation:</strong> Physics simulation of radar pulses</li>
+                <li><strong>Noise Addition:</strong> Realistic sensor measurement errors</li>
+                <li><strong>Two Error Types:</strong> Systematic (bias) + Arbitrary (random)</li>
+                <li><strong>Most Common:</strong> Gaussian noise (bell curve)</li>
+                <li><strong>Configuration:</strong> All parameters in dataconfig.yaml</li>
+                <li><strong>Implementation:</strong> Noise added in sensor_properties.py</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 30px; padding: 20px; background-color: #e7f3ff; border-radius: 5px;">
+            <h3>📚 Additional Documentation</h3>
+            <p>For more details, see:</p>
+            <ul>
+                <li><code>DATA_GENERATION_EXPLAINED.md</code> - Complete detailed guide</li>
+                <li><code>QUICK_REFERENCE_NOISE.md</code> - Code snippets and examples</li>
+                <li><code>REPORT_FIGURES.md</code> - Figure captions for your report</li>
+                <li><code>SUMMARY.txt</code> - Plain text summary</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
