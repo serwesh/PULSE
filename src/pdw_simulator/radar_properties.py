@@ -58,7 +58,6 @@ def calculate_rotation_angles(start_time, end_time, time_step, rotation_type, pa
     :param time_step: Time step for calculation
     :param rotation_type: 'constant' or 'varying'
     :param params: Dictionary of parameters for the rotation calculation
-    :return: List of [time, angle, period] triples
     """
     times = np.arange(start_time, end_time + time_step, time_step)
     if rotation_type == 'constant':
@@ -71,7 +70,11 @@ def calculate_rotation_angles(start_time, end_time, time_step, rotation_type, pa
     else:
         raise ValueError("Invalid rotation type. Must be 'constant' or 'varying'.")
     
-    return list(zip(times, angles, periods))
+    return {
+        'times': times,
+        'angles': angles,
+        'periods': periods
+    }
 
 
 
@@ -394,40 +397,37 @@ def jitter_pulse_width(start_time, end_time, mean_pulse_width, jitter_percentage
 def sinc_lobe_pattern(theta, theta_ml, P_ml, P_bl):
     """
     Calculate the radar antenna lobe pattern using a modified sinc function.
-    
-    :param theta: Angle from the antenna boresight (in radians)
-    :param theta_ml: Main lobe opening angle (in radians)
-    :param P_ml: Radar power at main lobe (in dB)
-    :param P_bl: Radar power at back lobe (in dB)
-    :return: Power at the given angle (in dB)
+    Supports both Quantity and raw magnitudes.
     """
-    # Convert inputs to appropriate units
-    theta = theta.to(ureg.radian).magnitude
-    theta_ml = theta_ml.to(ureg.radian).magnitude
-    P_ml = P_ml.to(ureg.dB).magnitude
-    P_bl = P_bl.to(ureg.dB).magnitude
-    # print(f"theta: {theta}")
-    # print(f"theta_ml: {theta_ml}")
+    # Robust conversion to magnitude
+    th_mag = theta.to(ureg.radian).magnitude if hasattr(theta, 'to') else theta
+    th_ml_mag = theta_ml.to(ureg.radian).magnitude if hasattr(theta_ml, 'to') else theta_ml
+    
+    # For power, we assume they are already magnitudes or in dB/dBm
+    p_ml_mag = P_ml.magnitude if hasattr(P_ml, 'magnitude') else P_ml
+    p_bl_mag = P_bl.magnitude if hasattr(P_bl, 'magnitude') else P_bl
+    
     # Calculate x
-    # Small value to avoid division by zero
-    x = 0.443 * np.sin(theta) / np.sin(theta_ml / 2)
-    # x = 0.443 * np.sin(theta) / np.sin(theta_ml / 2)
-    # print(f"x: {x}")
-    # Calculate P_theta based on the range of theta
-    P_theta = np.zeros_like(theta)
+    x = 0.443 * np.sin(th_mag) / np.sin(th_ml_mag / 2)
+    P_theta = np.zeros_like(th_mag)
 
     # For theta in [-pi/2, pi/2]
-    mask1 = np.abs(theta) <= np.pi/2
-    sinc = ma.masked_invalid(np.sin(np.pi * x[mask1]) / (np.pi * x[mask1]))
-    P_theta[mask1] = 20 * ma.log10(ma.abs(sinc)) + P_ml
+    mask1 = np.abs(th_mag) <= np.pi/2
+    if np.any(mask1):
+        sinc = ma.masked_invalid(np.sin(np.pi * x[mask1]) / (np.pi * x[mask1]))
+        P_theta[mask1] = 20 * ma.log10(ma.abs(sinc)) + p_ml_mag
 
     # For theta > pi/2
-    mask2 = theta > np.pi/2
-    P_theta[mask2] = 20 * np.log10(np.abs(np.sin(np.pi * x[mask2]) / (np.pi * x[mask2]))) + P_ml + 2/np.pi * P_bl * (theta[mask2] - np.pi/2)
+    mask2 = th_mag > np.pi/2
+    if np.any(mask2):
+        P_theta[mask2] = 20 * np.log10(np.abs(np.sin(np.pi * x[mask2]) / (np.pi * x[mask2]))) + p_ml_mag + 2/np.pi * p_bl_mag * (th_mag[mask2] - np.pi/2)
 
     # For theta < -pi/2
-    mask3 = theta < -np.pi/2
-    P_theta[mask3] = 20 * np.log10(np.abs(np.sin(np.pi * x[mask3]) / (np.pi * x[mask3]))) + P_ml + 2/np.pi * P_bl * (-theta[mask3] - np.pi/2)
-    power=P_theta*ureg.dBm
-    return power
+    mask3 = th_mag < -np.pi/2
+    if np.any(mask3):
+        P_theta[mask3] = 20 * np.log10(np.abs(np.sin(np.pi * x[mask3]) / (np.pi * x[mask3]))) + p_ml_mag + 2/np.pi * p_bl_mag * (-th_mag[mask3] - np.pi/2)
+    
+    # Convert masked array to regular array
+    P_theta = np.asarray(ma.filled(P_theta, -100.0))
+    return P_theta * ureg.dB
 

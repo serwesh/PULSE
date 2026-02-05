@@ -1,190 +1,468 @@
-# Configuration file for PDW simulator
+# Configuration to match Combineddeinterleaved.csv reference dataset
+# 15 radars with ~120K total pulses over 120 seconds
+
 scenario:
   start_time: 0.0
-  end_time: 100.0
+  end_time: 120.0  # 120 seconds to generate ~120K pulses
   time_step: 0.01
 
 radars:
-  - name: "Radar1"
-    power: 40.0 # In dBm
-    start_position: [100, 200]
-    velocity: [10, 20]
-    start_time: 10.0
+  # S1 - 30,592 pulses (PRI ~0.0039s)
+  - name: "S1"
+    power: 50.0
+    start_position: [1000, 500]
+    velocity: [5, 10]
+    start_time: 0.0
     rotation_type: "constant"
     rotation_params:
-      t0: 10.0
-      alpha0: 45.0 # In degrees (0-360)
+      t0: 0.0
+      alpha0: 45.0
       T_rot: 3.0
-    pri_type: "switched"
+    pri_type: "fixed"
     pri_params:
-      pri_pattern: [0.0006, 0.0007, 0.0008]
-      repetitions: [5, 5, 5]
-    frequency_type: "switched"
+      pri: 0.0039
+    frequency_type: "jitter"
     frequency_params:
-      frequency_pattern: [1.500e9, 1.504e9, 1.508e9] # Each separated by 4MHz minimum
-      repetitions: [5, 5, 5]
-    pulse_width_type: "switched"
+      mean_frequency: 1.4e9  # 1400 MHz
+      jitter_percentage: 2.0
+    pulse_width_type: "jitter"
     pulse_width_params:
-      pulse_width_pattern: [100.0e-6, 200.0e-6, 300.0e-6] # Within 100-500 microseconds
-      repetitions: [5, 5, 5]
+      mean_pulse_width: 226.0e-6  # 226 µs
+      jitter_percentage: 5.0
     lobe_pattern:
       type: "Sinc"
       main_lobe_opening_angle: 5.0
-      radar_power_at_main_lobe: 0.0 # dBm
-      radar_power_at_back_lobe: -20.0 # dBm
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -20.0
 
-  - name: "Radar2"
-    power: 55.0 # In dBm
+  # F - 7,050 pulses (PRI ~0.017s)
+  - name: "F"
+    power: 45.0
     start_position: [500, -300]
     velocity: [0, -10]
-    start_time: 2.0
-    rotation_type: "varying"
+    start_time: 0.0
+    rotation_type: "constant"
     rotation_params:
-      t0: 2.0
-      alpha0: 180.0 # In degrees (0-360)
+      t0: 0.0
+      alpha0: 180.0
       T_rot: 2.5
-      A: 0.5
-      s: 1.0
-      phi0: 0.0
-    pri_type: "jitter"
+    pri_type: "fixed"
     pri_params:
-      mean_pri: 0.001
-      jitter_percentage: 8.0
+      pri: 0.017
     frequency_type: "fixed"
     frequency_params:
-      frequency: 1.512e9 # At least 4MHz from Radar1's highest frequency
-    pulse_width_type: "jitter"
+      frequency: 4.331e9  # 4331 MHz
+    pulse_width_type: "stagger"
     pulse_width_params:
-      mean_pulse_width: 250.0e-6 # Within 100-500 microseconds
-      jitter_percentage: 8.0
+      pulse_width_pattern: [1.57e-6, 1.72e-6, 1.84e-6, 1.93e-6]  # 1.57-1.93 µs
     lobe_pattern:
       type: "Sinc"
       main_lobe_opening_angle: 4.0
-      radar_power_at_main_lobe: 0.0 # dBm
-      radar_power_at_back_lobe: -22.0 # dBm
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -25.0
 
-  - name: "Radar3"
-    power: 62.0 # In dBm
-    start_position: [100, 200]
-    velocity: [100, 10]
-    start_time: 4.0
-    rotation_type: "constant"
-    rotation_params:
-      t0: 0.0
-      alpha0: 270.0 # In degrees (0-360)
-      T_rot: 2.0
-    pri_type: "stagger"
-    pri_params:
-      pri_pattern: [0.0007, 0.0008, 0.0009, 0.001]
-    frequency_type: "stagger"
-    frequency_params:
-      frequency_pattern: [1.516e9, 1.520e9, 1.524e9, 1.528e9] # Each separated by 4MHz
-    pulse_width_type: "stagger"
-    pulse_width_params:
-      pulse_width_pattern: [150.0e-6, 250.0e-6, 350.0e-6, 450.0e-6] # Within 100-500 microseconds
-    lobe_pattern:
-      type: "Sinc"
-      main_lobe_opening_angle: 3.0
-      radar_power_at_main_lobe: 0.0 # dBm
-      radar_power_at_back_lobe: -25.0 # dBm
-
-  - name: "Radar4"
-    power: 58.0 # In dBm
-    start_position: [-400, 300]
-    velocity: [-15, 25]
+  # S3 - 8,241 pulses (PRI ~0.0145s)
+  - name: "S3"
+    power: 48.0
+    start_position: [-200, 800]
+    velocity: [15, 5]
     start_time: 0.0
     rotation_type: "varying"
     rotation_params:
       t0: 0.0
-      alpha0: 90.0 # In degrees (0-360)
-      T_rot: 3.5
-      A: 0.4
-      s: 1.5
-      phi0: 90.0
-    pri_type: "switched"
+      alpha0: 90.0
+      T_rot: 2.8
+      A: 0.3
+      s: 1.2
+      phi0: 0.0
+    pri_type: "fixed"
     pri_params:
-      pri_pattern: [0.0005, 0.0006, 0.0007]
-      repetitions: [6, 6, 6]
+      pri: 0.0145
+    frequency_type: "jitter"
+    frequency_params:
+      mean_frequency: 1.411e9  # 1411 MHz
+      jitter_percentage: 1.5
+    pulse_width_type: "fixed"
+    pulse_width_params:
+      pulse_width: 4.33e-6  # 4.33 µs
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 3.5
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -22.0
+
+  # S2 - 1,025 pulses (PRI ~0.117s)
+  - name: "S2"
+    power: 42.0
+    start_position: [300, -500]
+    velocity: [-10, 20]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 270.0
+      T_rot: 3.5
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.117
     frequency_type: "fixed"
     frequency_params:
-      frequency: 1.532e9 # At least 4MHz from Radar3's highest frequency
+      frequency: 1.425e9  # 1425 MHz
     pulse_width_type: "jitter"
     pulse_width_params:
-      mean_pulse_width: 400.0e-6 # Within 100-500 microseconds
+      mean_pulse_width: 8.0e-6  # 8 µs
       jitter_percentage: 10.0
     lobe_pattern:
       type: "Sinc"
-      main_lobe_opening_angle: 2.5
-      radar_power_at_main_lobe: 0.0 # dBm
-      radar_power_at_back_lobe: -28.0 # dBm
+      main_lobe_opening_angle: 6.0
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -18.0
 
-  - name: "Radar5"
-    power: 60.0 # In dBm
-    start_position: [800, -600]
-    velocity: [-5, -5]
-    start_time: 5.0
+  # S4 - 9,765 pulses (PRI ~0.0123s)
+  - name: "S4"
+    power: 52.0
+    start_position: [-600, -400]
+    velocity: [20, -15]
+    start_time: 0.0
     rotation_type: "constant"
     rotation_params:
-      t0: 5.0
-      alpha0: 60.0 # In degrees (0-360)
+      t0: 0.0
+      alpha0: 135.0
+      T_rot: 2.2
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.0123
+    frequency_type: "stagger"
+    frequency_params:
+      frequency_pattern: [1.376e9, 1.425e9, 1.426e9]  # 1376-1426 MHz
+    pulse_width_type: "fixed"
+    pulse_width_params:
+      pulse_width: 225.82e-6  # 225.82 µs
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 4.5
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -20.0
+
+  # J - 40,592 pulses (PRI ~0.00295s) - Largest contributor
+  - name: "J"
+    power: 55.0
+    start_position: [800, 600]
+    velocity: [-5, -5]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 0.0
+      T_rot: 2.0
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.00295
+    frequency_type: "jitter"
+    frequency_params:
+      mean_frequency: 3.2e9  # 3200 MHz (mean of reference)
+      jitter_percentage: 3.0
+    pulse_width_type: "jitter"
+    pulse_width_params:
+      mean_pulse_width: 35.0e-6  # 35 µs (mean of reference)
+      jitter_percentage: 50.0  # Wide variation
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 3.0
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -30.0
+
+  # A - 5,325 pulses (PRI ~0.0225s)
+  - name: "A"
+    power: 47.0
+    start_position: [400, 300]
+    velocity: [10, 10]
+    start_time: 0.0
+    rotation_type: "varying"
+    rotation_params:
+      t0: 0.0
+      alpha0: 315.0
+      T_rot: 3.2
+      A: 0.4
+      s: 1.0
+      phi0: 45.0
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.0225
+    frequency_type: "fixed"
+    frequency_params:
+      frequency: 2.8e9  # 2800 MHz
+    pulse_width_type: "stagger"
+    pulse_width_params:
+      pulse_width_pattern: [20.0e-6, 30.0e-6, 40.0e-6]
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 5.5
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -24.0
+
+  # B - 856 pulses (PRI ~0.14s)
+  - name: "B"
+    power: 40.0
+    start_position: [-300, 200]
+    velocity: [5, -20]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 225.0
       T_rot: 4.0
     pri_type: "fixed"
     pri_params:
-      pri: 0.0004
+      pri: 0.14
     frequency_type: "fixed"
     frequency_params:
-      frequency: 1.536e9 # At least 4MHz from Radar4's frequency
+      frequency: 3.5e9  # 3500 MHz
     pulse_width_type: "fixed"
     pulse_width_params:
-      pulse_width: 150.0e-6 # Within 100-500 microseconds
+      pulse_width: 50.0e-6  # 50 µs
     lobe_pattern:
       type: "Sinc"
-      main_lobe_opening_angle: 2.0
-      radar_power_at_main_lobe: 0.0 # dBm
-      radar_power_at_back_lobe: -30.0 # dBm
+      main_lobe_opening_angle: 6.5
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -15.0
+
+  # C - 1,100 pulses (PRI ~0.109s)
+  - name: "C"
+    power: 43.0
+    start_position: [700, -200]
+    velocity: [-15, 10]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 60.0
+      T_rot: 2.7
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.109
+    frequency_type: "jitter"
+    frequency_params:
+      mean_frequency: 2.5e9  # 2500 MHz
+      jitter_percentage: 2.5
+    pulse_width_type: "jitter"
+    pulse_width_params:
+      mean_pulse_width: 45.0e-6  # 45 µs
+      jitter_percentage: 15.0
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 4.8
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -21.0
+
+  # D - 514 pulses (PRI ~0.233s)
+  - name: "D"
+    power: 38.0
+    start_position: [-500, -600]
+    velocity: [25, 5]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 150.0
+      T_rot: 3.8
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.233
+    frequency_type: "fixed"
+    frequency_params:
+      frequency: 4.0e9  # 4000 MHz
+    pulse_width_type: "fixed"
+    pulse_width_params:
+      pulse_width: 60.0e-6  # 60 µs
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 7.0
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -16.0
+
+  # E - 4,410 pulses (PRI ~0.0272s)
+  - name: "E"
+    power: 49.0
+    start_position: [200, 700]
+    velocity: [-10, -10]
+    start_time: 0.0
+    rotation_type: "varying"
+    rotation_params:
+      t0: 0.0
+      alpha0: 200.0
+      T_rot: 2.4
+      A: 0.5
+      s: 1.5
+      phi0: 90.0
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.0272
+    frequency_type: "stagger"
+    frequency_params:
+      frequency_pattern: [3.0e9, 3.1e9, 3.2e9]  # 3000-3200 MHz
+    pulse_width_type: "stagger"
+    pulse_width_params:
+      pulse_width_pattern: [25.0e-6, 35.0e-6, 45.0e-6]
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 4.2
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -23.0
+
+  # G - 468 pulses (PRI ~0.256s)
+  - name: "G"
+    power: 37.0
+    start_position: [900, -100]
+    velocity: [0, 15]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 300.0
+      T_rot: 4.2
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.256
+    frequency_type: "fixed"
+    frequency_params:
+      frequency: 4.5e9  # 4500 MHz
+    pulse_width_type: "fixed"
+    pulse_width_params:
+      pulse_width: 70.0e-6  # 70 µs
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 7.5
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -14.0
+
+  # H - 744 pulses (PRI ~0.161s)
+  - name: "H"
+    power: 41.0
+    start_position: [-700, 400]
+    velocity: [15, -5]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 120.0
+      T_rot: 3.3
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.161
+    frequency_type: "jitter"
+    frequency_params:
+      mean_frequency: 3.8e9  # 3800 MHz
+      jitter_percentage: 2.0
+    pulse_width_type: "jitter"
+    pulse_width_params:
+      mean_pulse_width: 55.0e-6  # 55 µs
+      jitter_percentage: 12.0
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 5.8
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -19.0
+
+  # I - 1,052 pulses (PRI ~0.114s)
+  - name: "I"
+    power: 44.0
+    start_position: [100, -800]
+    velocity: [-20, 15]
+    start_time: 0.0
+    rotation_type: "varying"
+    rotation_params:
+      t0: 0.0
+      alpha0: 75.0
+      T_rot: 2.9
+      A: 0.35
+      s: 1.3
+      phi0: 60.0
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.114
+    frequency_type: "fixed"
+    frequency_params:
+      frequency: 2.2e9  # 2200 MHz
+    pulse_width_type: "stagger"
+    pulse_width_params:
+      pulse_width_pattern: [30.0e-6, 40.0e-6, 50.0e-6, 60.0e-6]
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 5.2
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -20.0
+
+  # T - 9,102 pulses (PRI ~0.0132s)
+  - name: "T"
+    power: 51.0
+    start_position: [-100, -100]
+    velocity: [10, -10]
+    start_time: 0.0
+    rotation_type: "constant"
+    rotation_params:
+      t0: 0.0
+      alpha0: 30.0
+      T_rot: 2.1
+    pri_type: "fixed"
+    pri_params:
+      pri: 0.0132
+    frequency_type: "jitter"
+    frequency_params:
+      mean_frequency: 4.2e9  # 4200 MHz
+      jitter_percentage: 2.5
+    pulse_width_type: "jitter"
+    pulse_width_params:
+      mean_pulse_width: 40.0e-6  # 40 µs
+      jitter_percentage: 20.0
+    lobe_pattern:
+      type: "Sinc"
+      main_lobe_opening_angle: 4.0
+      radar_power_at_main_lobe: 0.0
+      radar_power_at_back_lobe: -22.0
 
 sensors:
   - name: "Sensor1"
-    start_position: [2000, 2000]
-    velocity: [25, 10]
+    start_position: [0, 0]
+    velocity: [0, 0]
     start_time: 0.0
-    saturation_level: "-65 dBm" # Matches minimum amplitude range
-    freq_padding_factor: 5
+    saturation_level: "-5 dBm"
+    freq_padding_factor: 4
     detection_probability:
-      level: [-65, -70, -75, -80] # In dBm
-      probability: [100, 90, 70, 50]
+      level: [-50, -70, -90, -110]
+      probability: [100, 95, 80, 60]
     amplitude_error:
       systematic:
         type: "constant"
         error: "0 dBm"
       arbitrary:
         type: "gaussian"
-        error: "2 dBm"
+        error: "3 dBm"
     toa_error:
       systematic:
         type: "constant"
         error: "0 s"
       arbitrary:
         type: "gaussian"
-        error: "5e-9 s"
+        error: "1e-9 s"
     frequency_error:
       systematic:
         type: "constant"
         error: "0 Hz"
       arbitrary:
         type: "gaussian"
-        error: "1%" # Matches 1% accuracy specification
+        error: "1%"
     pulse_width_error:
       systematic:
         type: "constant"
         error: "0 s"
       arbitrary:
-        type: "gaussian"
-        error: "25e-9 s" # Matches ±25 nanosecond specification
+        type: "uniform"
+        error: "2%"
     aoa_error:
       systematic:
         type: "constant"
         error: "0 deg"
       arbitrary:
         type: "gaussian"
-        error: "3.5 deg" # Within 2-5 degree specification
+        error: "1 deg"

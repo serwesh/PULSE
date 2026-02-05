@@ -71,7 +71,7 @@ def apply_custom_styles():
 
     /* Inputs and Text Styling */
     .stTextInput input, .stNumberInput input, .stSelectbox select {
-        color: #ffffff !important;
+        color: #000000 !important;
         background: transparent !important;
         font-size: 1rem !important;
         padding: 0.75rem !important;

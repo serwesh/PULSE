@@ -51,20 +51,21 @@ class StreamlitPDWVisualizer:
         )
         
         # Update y-axis labels
-        self.fig.update_yaxes(title_text="Amplitude (dBm)", row=1, col=1)
-        self.fig.update_yaxes(title_text="Frequency (Hz)", row=2, col=1)
-        self.fig.update_yaxes(title_text="Pulse Width (s)", row=3, col=1)
+        self.fig.update_yaxes(title_text="Power (dBm)", row=1, col=1)
+        self.fig.update_yaxes(title_text="Frequency (MHz)", row=2, col=1)
+        self.fig.update_yaxes(title_text="Pulse Width (µs)", row=3, col=1)
         
         # Update x-axis labels
-        self.fig.update_xaxes(title_text="Time (s)", row=3, col=1)
+        self.fig.update_xaxes(title_text="Pulse Index", row=3, col=1)
 
     def update_data(self, pdw_data: pd.DataFrame):
         """Update visualization with new PDW data"""
-        # Update data buffers
-        self.data['time'] = pdw_data['Time'].tolist()[-self.max_points:]
-        self.data['amplitude'] = pdw_data['Amplitude'].tolist()[-self.max_points:]
-        self.data['frequency'] = pdw_data['Frequency'].tolist()[-self.max_points:]
-        self.data['pulse_width'] = pdw_data['PulseWidth'].tolist()[-self.max_points:]
+        # Update data buffers - use index as time axis since TOA is removed
+        num_points = min(len(pdw_data), self.max_points)
+        self.data['time'] = list(range(num_points))
+        self.data['amplitude'] = pdw_data['Power(dBm)'].tolist()[-self.max_points:]
+        self.data['frequency'] = pdw_data['Freq(MHz)'].tolist()[-self.max_points:]
+        self.data['pulse_width'] = pdw_data['PW(µs)'].tolist()[-self.max_points:]
         
         # Update plot data
         with self.fig.batch_update():

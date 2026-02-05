@@ -13,41 +13,45 @@ def create_error_model(error_config):
     """
     if error_config['type'] == 'constant':
         error_value, error_unit = parse_value_and_unit(error_config['error'])
-        return lambda t: error_value * ureg(error_unit)
+        unit = ureg(error_unit)
+        return lambda t: error_value * unit
     elif error_config['type'] == 'linear':
         error_value, error_unit = parse_value_and_unit(error_config['error'])
         rate_value, rate_unit = parse_value_and_unit(error_config['rate'])
-        return lambda t: (error_value + rate_value * t.magnitude) * ureg(error_unit)
+        unit = ureg(error_unit)
+        return lambda t: (error_value + rate_value * t.magnitude) * unit
     elif error_config['type'] == 'sinus':
         # Parse amplitude
         A, A_unit = parse_value_and_unit(error_config['amplitude'])
+        unit = ureg(A_unit)
         
         # Parse frequency
         f, f_unit = parse_value_and_unit(error_config['frequency'])
         if f_unit != 'Hz':
             raise ValueError(f"Frequency unit must be Hz, got {f_unit}")
         
-        # Parse phase (assuming it's a unitless numerical value)
+        # Parse phase
         try:
             phi0 = float(error_config['phase'])
         except ValueError:
             raise ValueError(f"Phase must be a numerical value, got {error_config['phase']}")
-        
-        print(f"Sinusoidal Error Model Parameters: Amplitude={A} {A_unit}, Frequency={f} Hz, Phase={phi0}")
-        
-        return lambda t: A * np.sin(2 * np.pi * f * t.magnitude + phi0) * ureg(A_unit)
+            
+        return lambda t: A * np.sin(2 * np.pi * f * t.magnitude + phi0) * unit
     elif error_config['type'] == 'gaussian':
         error_value, error_unit = parse_value_and_unit(error_config['error'])
+        unit = ureg(error_unit)
         if error_unit == 'percent':
-            return lambda size: np.random.normal(0, error_value, size) * ureg.dimensionless
+            # Use Quantity constructor for arrays to be safe or just return dimensionless Quantity
+            return lambda size: ureg.Quantity(np.random.normal(0, error_value, size), 'dimensionless')
         else:
-            return lambda size: np.random.normal(0, error_value, size) * ureg(error_unit)
+            return lambda size: ureg.Quantity(np.random.normal(0, error_value, size), error_unit)
     elif error_config['type'] == 'uniform':
         error_value, error_unit = parse_value_and_unit(error_config['error'])
+        unit = ureg(error_unit)
         if error_unit == 'percent':
-            return lambda size: np.random.uniform(-error_value, error_value, size) * ureg.dimensionless
+            return lambda size: ureg.Quantity(np.random.uniform(-error_value, error_value, size), 'dimensionless')
         else:
-            return lambda size: np.random.uniform(-error_value, error_value, size) * ureg(error_unit)
+            return lambda size: ureg.Quantity(np.random.uniform(-error_value, error_value, size), error_unit)
     else:
         raise ValueError(f"Unknown error type: {error_config['type']}")
 
@@ -76,26 +80,21 @@ def parse_value_and_unit(string_value):
 def detect_pulse(amplitude, detection_levels, detection_probabilities, saturation_level):
     """
     Determine if a pulse is detected based on its amplitude.
-    All amplitudes should be in dBm.
+    Optimized for performance by using magnitudes.
     """
-    # Convert saturation_level to dBm if it's a string
-    if isinstance(saturation_level, str):
-        value = float(saturation_level.split()[0])
-        saturation_level = value * ureg.dBm
+    # Use magnitudes for fast comparison
+    amp_mag = amplitude.magnitude if hasattr(amplitude, 'magnitude') else amplitude
+    sat_mag = saturation_level.magnitude if hasattr(saturation_level, 'magnitude') else saturation_level
 
-    # Compare amplitudes (all should be in dBm)
-    if amplitude.magnitude > saturation_level.magnitude:
+    if amp_mag > sat_mag:
         return True
 
-    for level, prob in zip(detection_levels, detection_probabilities):
-        # Convert level to dBm if needed
-        if isinstance(level, (int, float)):
-            level = level * ureg.dBm
-        elif isinstance(level, str):
-            value = float(level.split()[0])
-            level = value * ureg.dBm
+    for i in range(len(detection_levels)):
+        level = detection_levels[i]
+        prob = detection_probabilities[i]
+        level_mag = level.magnitude if hasattr(level, 'magnitude') else level
 
-        if amplitude.magnitude > level.magnitude:
+        if amp_mag > level_mag:
             return np.random.random() < prob
     return False
 
@@ -127,31 +126,35 @@ def detect_pulse(amplitude, detection_levels, detection_probabilities, saturatio
 def measure_amplitude(true_amplitude, r, P_theta, t, P0, amplitude_error_syst, amplitude_error_arb):
     """
     Measure the amplitude of a detected pulse.
-    All amplitude measurements are in dBm.
+    Supports both single values and numpy arrays.
     """
-    # Ensure proper units
-    r = ureg.Quantity(r).to(ureg.meter)
-    P0 = ureg.Quantity(P0).to(ureg.dBm)
+    # Use magnitudes for calculation
+    r_mag = r.magnitude if hasattr(r, 'magnitude') else r
+    p0_mag = P0.magnitude if hasattr(P0, 'magnitude') else P0
+    p_theta_mag = P_theta.magnitude if hasattr(P_theta, 'magnitude') else P_theta
+    t_mag = t.magnitude if hasattr(t, 'magnitude') else t
     
-    # Convert r to a dimensionless quantity by dividing by 1 meter
-    r_dimensionless = r / ureg.meter
+    # Path loss (dB)
+    pr_mag = 20 * np.log10(r_mag)
     
-    # Calculate path loss in dB
-    Pr = 20 * np.log10(r_dimensionless.magnitude) * ureg.dBm
-    
-    # P_theta should already be in dBm from the radar calculations
-    if not isinstance(P_theta, ureg.Quantity):
-        P_theta = P_theta * ureg.dBm
-        
     # Get systematic and arbitrary errors
-    P_syst = ureg.Quantity(amplitude_error_syst(t)).to(ureg.dBm)
-    P_arb = ureg.Quantity(amplitude_error_arb(1)[0]).to(ureg.dBm)
+    size = len(t_mag) if isinstance(t_mag, np.ndarray) else 1
     
-    # Calculate total amplitude in dBm
-    total_magnitude = P0.magnitude - Pr.magnitude + P_theta.magnitude + P_syst.magnitude + P_arb.magnitude
-    measured_amplitude = total_magnitude * ureg.dBm
+    p_syst = amplitude_error_syst(t)
+    p_arb = amplitude_error_arb(size)
     
-    return measured_amplitude
+    p_syst_mag = p_syst.magnitude if hasattr(p_syst, 'magnitude') else p_syst
+    p_arb_mag = p_arb.magnitude if hasattr(p_arb, 'magnitude') else p_arb
+    
+    if size == 1 and isinstance(p_arb_mag, np.ndarray):
+        p_arb_mag = p_arb_mag[0]
+    
+    m_amp_mag = p0_mag - pr_mag + p_theta_mag + p_syst_mag + p_arb_mag
+    
+    if isinstance(t_mag, np.ndarray) and np.isscalar(m_amp_mag):
+        m_amp_mag = np.array([m_amp_mag])
+        
+    return m_amp_mag * ureg.dBm
 
 # def measure_amplitude(true_amplitude, r, P_theta, t, P0, amplitude_error_syst, amplitude_error_arb):
 #     """
@@ -211,180 +214,134 @@ def measure_amplitude(true_amplitude, r, P_theta, t, P0, amplitude_error_syst, a
 def measure_toa(true_toa, r, t, toa_error_syst, toa_error_arb):
     """
     Measure the Time of Arrival (TOA) of a detected pulse.
-    
-    :param true_toa: True TOA of the pulse
-    :param r: Distance between radar and sensor
-    :param t: Current time
-    :param toa_error_syst: Function to generate systematic error
-    :param toa_error_arb: Function to generate arbitrary error
-    :return: Measured TOA
+    Supports both single values and numpy arrays.
     """
-    c = 299792458 * ureg.meter / ureg.second  # Speed of light
-    delta_Tr = r / c
+    # Use magnitudes
+    true_toa_mag = true_toa.magnitude if hasattr(true_toa, 'magnitude') else true_toa
+    r_mag = r.magnitude if hasattr(r, 'magnitude') else r
+    t_mag = t.magnitude if hasattr(t, 'magnitude') else t
     
-    #TODO - Check why TOA_syst and TOA_arb are coming out as dimensionless sometimes
-    # Check if TOA_syst and TOA_arb have units; add ureg.second only if dimensionless
-    TOA_syst = toa_error_syst(t)
-    if TOA_syst.dimensionality == ureg.dimensionless:
-        TOA_syst *= ureg.second
+    # Speed of light magnitude
+    c_mag = 299792458
+    delta_Tr_mag = r_mag / c_mag
+    
+    # Errors
+    size = len(t_mag) if isinstance(t_mag, np.ndarray) else 1
+    
+    t_syst = toa_error_syst(t)
+    t_arb = toa_error_arb(size)
+    
+    t_syst_mag = t_syst.magnitude if hasattr(t_syst, 'magnitude') else t_syst
+    t_arb_mag = t_arb.magnitude if hasattr(t_arb, 'magnitude') else t_arb
+    
+    if size == 1 and isinstance(t_arb_mag, np.ndarray):
+        t_arb_mag = t_arb_mag[0]
+    
+    # Total TOA magnitude
+    m_toa_mag = true_toa_mag + delta_Tr_mag + t_syst_mag + t_arb_mag
+    
+    if isinstance(t_mag, np.ndarray) and np.isscalar(m_toa_mag):
+         m_toa_mag = np.array([m_toa_mag])
+         
+    return m_toa_mag * ureg.second
 
-    TOA_arb = toa_error_arb(1)[0]  # Generate a single random error
-    if TOA_arb.dimensionality == ureg.dimensionless:
-        TOA_arb *= ureg.second
-
-    # Debug prints
-    # print(f"TOA_system magnitude: {TOA_syst.magnitude}, dimensionality: {TOA_syst.dimensionality}")
-    # print(f"TOA_arbitrary magnitude: {TOA_arb.magnitude}, dimensionality: {TOA_arb.dimensionality}")
-    # print(f"True_TOA dimensionality: {true_toa.dimensionality}")
-    # print(f"Delta_Tr dimensionality: {delta_Tr.dimensionality}")
-
-    # Calculate the measured TOA
-    measured_toa = true_toa + delta_Tr + TOA_syst + TOA_arb
-    return measured_toa
-
-
-# Add to sensor_properties.py
 
 def measure_frequency(true_frequency, t, current_time, frequency_error_syst, frequency_error_arb, radar=None, sensor=None):
     """
-    Measure frequency with enhanced FFT interpolation, error models, and Doppler shift.
-    
-    Args:
-        true_frequency: True frequency with units
-        t: Time with units
-        current_time: Current simulation time with units
-        frequency_error_syst: Systematic error model function
-        frequency_error_arb: Arbitrary error model function
-        radar: Optional radar object for Doppler calculations
-        sensor: Optional sensor object for Doppler calculations
-    
-    Returns:
-        Measured frequency with units
+    Measure frequency with statistical error models and Doppler shift.
+    Supports both single values and numpy arrays.
     """
-    # Get enhanced frequency measurement
-    measured_freq = enhanced_frequency_measurement(true_frequency, t, current_time)
+    f_mag = true_frequency.magnitude if hasattr(true_frequency, 'magnitude') else true_frequency
+    t_mag = t.magnitude if hasattr(t, 'magnitude') else t
     
-    # Apply error models
+    # Apply systematic and arbitrary errors
+    size = len(t_mag) if isinstance(t_mag, np.ndarray) else 1
+    
     f_syst = frequency_error_syst(t)
-    f_arb = frequency_error_arb(1)[0]  # Generate a single random error
+    f_arb = frequency_error_arb(size)
     
-    # Ensure proper units
-    if f_syst.dimensionality == ureg.dimensionless:
-        f_syst = f_syst * ureg.Hz
-    if f_arb.dimensionality == ureg.dimensionless:
-        f_arb = f_arb * ureg.Hz
+    f_syst_mag = f_syst.magnitude if hasattr(f_syst, 'magnitude') else f_syst
+    f_arb_mag = f_arb.magnitude if hasattr(f_arb, 'magnitude') else f_arb
         
-    # Apply errors to measurement
-    measured_freq = measured_freq + f_syst + f_arb
+    if size == 1 and isinstance(f_arb_mag, np.ndarray):
+        f_arb_mag = f_arb_mag[0]
+        
+    # Standard measurement error
+    std_error_mag = np.random.normal(0, 1e6, size) 
+    
+    measured_freq_mag = f_mag + f_syst_mag + f_arb_mag + std_error_mag
     
     # Apply Doppler shift if radar and sensor are provided
     if radar is not None and sensor is not None:
-        measured_freq = apply_doppler_effect(measured_freq, radar, sensor)
+        # Doppler usually returns a Quantity. If we have arrays, it might be tricky.
+        # But apply_doppler_effect usually handles Quantities.
+        measured_freq = apply_doppler_effect(measured_freq_mag * ureg.Hz, radar, sensor)
+        return abs(measured_freq)
     
-    return measured_freq
+    if isinstance(t_mag, np.ndarray) and np.isscalar(measured_freq_mag):
+         measured_freq_mag = np.array([measured_freq_mag])
+    
+    return abs(measured_freq_mag) * ureg.Hz
 
-
-def enhanced_frequency_measurement(true_frequency, t, current_time, padding_factor=4):
-    """
-    Enhanced frequency measurement with zero padding and proper unit handling.
-    Uses fftshift for proper frequency centering while ensuring positive frequencies.
-    """
-    ureg = get_unit_registry()
-    
-    # Generate some signal samples around the true frequency
-    sample_rate = 2.5 * ureg.GHz  # Nyquist rate for typical radar frequencies
-    num_samples = 1024  # Base number of samples
-    
-    # Create time array for sampling
-    t_samples = np.linspace(
-        current_time.magnitude, 
-        (current_time + 1*ureg.microsecond).magnitude,
-        num_samples
-    ) * ureg.second
-    
-    # Generate complex signal at true frequency
-    signal = np.exp(2j * np.pi * true_frequency.magnitude * t_samples.magnitude)
-    
-    # Add some noise
-    noise_level = 0.1
-    signal += noise_level * (np.random.randn(len(signal)) + 1j * np.random.randn(len(signal)))
-    
-    # Zero padding
-    padded_length = num_samples * padding_factor
-    padded_signal = np.pad(signal, (0, padded_length - num_samples))
-    
-    # Perform FFT and shift
-    spectrum = np.fft.fftshift(np.fft.fft(padded_signal))
-    frequencies = np.fft.fftshift(np.fft.fftfreq(padded_length, (1/sample_rate).magnitude))
-    
-    # After fftshift, the frequencies are arranged from -Fs/2 to +Fs/2
-    # Select only the positive half of the spectrum
-    center_idx = len(frequencies) // 2
-    positive_spectrum = spectrum[center_idx:]
-    positive_frequencies = frequencies[center_idx:]
-    
-    # Find peak frequency in positive frequencies
-    peak_idx = np.argmax(np.abs(positive_spectrum))
-    measured_freq = positive_frequencies[peak_idx] * ureg.Hz
-    
-    # Add some measurement error
-    freq_error = np.random.normal(0, 1e6) * ureg.Hz  # 1 MHz standard deviation error
-    measured_freq = measured_freq + freq_error
-    
-    # Ensure the measured frequency stays close to true frequency
-    if np.abs(measured_freq - true_frequency) > 10 * ureg.MHz:
-        measured_freq = true_frequency + freq_error
-    
-    return abs(measured_freq)  # Ensure positive frequency
 
 def measure_pulse_width(true_pw, t, pw_error_syst, pw_error_arb):
     """
     Measure the pulse width of a detected pulse.
-    
-    :param true_pw: True pulse width
-    :param t: Current time
-    :param pw_error_syst: Function to generate systematic error
-    :param pw_error_arb: Function to generate arbitrary error
-    :return: Measured pulse width
+    Supports both single values and numpy arrays.
     """
-    PW_syst = pw_error_syst(t)
-    PW_arb = pw_error_arb(1)[0]  # Generate a single random error
+    pw_mag = true_pw.magnitude if hasattr(true_pw, 'magnitude') else true_pw
+    t_mag = t.magnitude if hasattr(t, 'magnitude') else t
+    
+    size = len(t_mag) if isinstance(t_mag, np.ndarray) else 1
+    
+    pw_syst = pw_error_syst(t)
+    pw_arb = pw_error_arb(size)
 
-    if isinstance(PW_arb, ureg.Quantity) and PW_arb.units == ureg.percent:
-        PW_arb = true_pw * PW_arb.magnitude / 100
+    pw_syst_mag = pw_syst.magnitude if hasattr(pw_syst, 'magnitude') else pw_syst
+    pw_arb_mag = pw_arb.magnitude if hasattr(pw_arb, 'magnitude') else pw_arb
+    
+    if size == 1 and isinstance(pw_arb_mag, np.ndarray):
+        pw_arb_mag = pw_arb_mag[0]
+        
+    # Handling percent or dimensionless arbitrary error
+    if hasattr(pw_arb, 'units') and pw_arb.units == ureg.percent:
+        pw_arb_mag = pw_mag * pw_arb_mag / 100
+    elif hasattr(pw_arb, 'dimensionless') and pw_arb.dimensionless:
+        pw_arb_mag = pw_mag * pw_arb_mag
 
-    if isinstance(PW_arb, ureg.Quantity) and PW_arb.dimensionless:
-        PW_arb = true_pw * PW_arb.magnitude
-    # print(f"true_pw: {true_pw}, type: {type(true_pw.magnitude)}")
-    # print(f"PW_syst {PW_syst}, type: {type(PW_syst.magnitude)}")
-    # print(f"PW_arb: {PW_arb}, type: {type(PW_arb.magnitude)}")
-    print(f"true_pw: {true_pw}, type: {true_pw.dimensionality}")
-    print(f"PW_syst {PW_syst}, type: {PW_syst.dimensionality}")
-    print(f"PW_arb: {PW_arb}, type: {PW_arb.dimensionality}")
-    if PW_arb.dimensionality == ureg.dimensionless:
-        PW_arb *= ureg.second
-    if PW_syst.dimensionality == ureg.dimensionless:
-        PW_syst *= ureg.second
-    if true_pw.dimensionality == ureg.dimensionless:
-        true_pw *= ureg.second
-    measured_pw = true_pw + PW_syst + PW_arb
-    return measured_pw.to(ureg.second)
+    m_pw_mag = pw_mag + pw_syst_mag + pw_arb_mag
+    
+    if isinstance(t_mag, np.ndarray) and np.isscalar(m_pw_mag):
+         m_pw_mag = np.array([m_pw_mag])
+         
+    return m_pw_mag * ureg.second
+
 
 def measure_aoa(true_aoa, t, aoa_error_syst, aoa_error_arb):
     """
     Measure the Angle of Arrival (AOA) of a detected pulse.
-    
-    :param true_aoa: True AOA of the pulse
-    :param t: Current time
-    :param aoa_error_syst: Function to generate systematic error
-    :param aoa_error_arb: Function to generate arbitrary error
-    :return: Measured AOA
+    Supports both single values and numpy arrays.
     """
-    AOA_syst = aoa_error_syst(t)
-    AOA_arb = aoa_error_arb(1)[0]  # Generate a single random error
+    aoa_mag = true_aoa.magnitude if hasattr(true_aoa, 'magnitude') else true_aoa
+    t_mag = t.magnitude if hasattr(t, 'magnitude') else t
     
-    measured_aoa = true_aoa + AOA_syst + AOA_arb
-    return measured_aoa.to(ureg.degree)
+    size = len(t_mag) if isinstance(t_mag, np.ndarray) else 1
+    
+    a_syst = aoa_error_syst(t)
+    a_arb = aoa_error_arb(size)
+    
+    a_syst_mag = a_syst.magnitude if hasattr(a_syst, 'magnitude') else a_syst
+    a_arb_mag = a_arb.magnitude if hasattr(a_arb, 'magnitude') else a_arb
+    
+    if size == 1 and isinstance(a_arb_mag, np.ndarray):
+        a_arb_mag = a_arb_mag[0]
+    
+    m_aoa_mag = aoa_mag + a_syst_mag + a_arb_mag
+    
+    if isinstance(t_mag, np.ndarray) and np.isscalar(m_aoa_mag):
+         m_aoa_mag = np.array([m_aoa_mag])
+         
+    return m_aoa_mag * ureg.degree
 
 # Additional function for AOA sinusoidal error
 def aoa_sinusoidal_error(AOA, A, f, AOA_ref):

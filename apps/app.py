@@ -4,6 +4,7 @@ import subprocess
 import os
 import ast
 import pandas as pd
+import numpy as np
 import copy
 import functools
 import sys
@@ -136,7 +137,7 @@ def run_simulation(system_config):
 
 def display_output(system_config):
     """
-    Display the newest PDW CSV data in tabs (Visualizations & Raw Data).
+    Display the newest PDW CSV data in tabs (Visualizations, Data Analysis & Raw Data).
     """
     st.subheader("PDW Data")
     pdw_data_dir = system_config['files']['pdw_data']['directory']
@@ -151,8 +152,17 @@ def display_output(system_config):
             pd.options.display.float_format = '{:.9e}'.format
             pdw_data = pd.read_csv(pdw_path)
             
-            tab1, tab2 = st.tabs(["Visualizations", "Raw Data"])
+            # Create 4 tabs instead of 3
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "📈 Visualizations", 
+                "⏱️ TOD Analysis", 
+                "📊 Data Analysis", 
+                "📋 Raw Data"
+            ])
+            
+            # Tab 1: Original Visualizations
             with tab1:
+                st.markdown("### 📈 Pulse Descriptor Word Visualizations")
                 viz_container = st.container()
                 visualizer = create_pdw_visualizer(viz_container)
                 visualizer.update_data(pdw_data)
@@ -165,14 +175,482 @@ def display_output(system_config):
                 with col2:
                     csv_data = pdw_data.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        label="Download PDW Data",
+                        label="📥 Download PDW Data",
                         data=csv_data,
                         file_name=os.path.basename(pdw_path),
                         mime='text/csv',
                         key="download_pdw_btn"
                     )
             
+            # Tab 2: NEW - TOD Analysis
             with tab2:
+                st.markdown("### ⏱️ Time of Detection (TOD) Analysis")
+                
+                if 'TOD(ms)' in pdw_data.columns:
+                    import plotly.graph_objects as go
+                    from plotly.subplots import make_subplots
+                    
+                    tod = pdw_data['TOD(ms)']
+                    
+                    # TOD Statistics
+                    st.markdown("#### 📊 TOD Statistics")
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    with col1:
+                        st.metric("Min TOD", f"{tod.min():.2f} ms")
+                    with col2:
+                        st.metric("Max TOD", f"{tod.max():.2f} ms")
+                    with col3:
+                        duration_sec = (tod.max() - tod.min()) / 1000
+                        st.metric("Duration", f"{duration_sec:.2f} s")
+                    with col4:
+                        tod_diff = tod.diff().dropna()
+                        st.metric("Median Interval", f"{tod_diff.median():.2f} ms")
+                    with col5:
+                        st.metric("Mean Interval", f"{tod_diff.mean():.2f} ms")
+                    
+                    # Timeline Plot
+                    st.markdown("#### 📈 Pulse Timeline")
+                    
+                    # Sample data if too large
+                    sample_size = min(10000, len(pdw_data))
+                    if len(pdw_data) > sample_size:
+                        sample_indices = np.random.choice(len(pdw_data), sample_size, replace=False)
+                        sample_indices.sort()
+                        plot_data = pdw_data.iloc[sample_indices]
+                    else:
+                        plot_data = pdw_data
+                    
+                    fig = go.Figure()
+                    
+                    if 'Name' in pdw_data.columns:
+                        # Color by emitter
+                        colors = {'S1': '#1f77b4', 'T': '#ff7f0e', 'J': '#2ca02c', 
+                                 'S4': '#d62728', 'F': '#9467bd', 'S3': '#8c564b', 'S2': '#e377c2'}
+                        
+                        for name in plot_data['Name'].unique():
+                            name_data = plot_data[plot_data['Name'] == name]
+                            fig.add_trace(go.Scatter(
+                                x=name_data['TOD(ms)'],
+                                y=[name] * len(name_data),
+                                mode='markers',
+                                name=name,
+                                marker=dict(
+                                    size=4,
+                                    color=colors.get(name, '#gray'),
+                                    opacity=0.6
+                                ),
+                                hovertemplate='<b>%{fullData.name}</b><br>TOD: %{x:.2f} ms<extra></extra>'
+                            ))
+                    else:
+                        fig.add_trace(go.Scatter(
+                            x=plot_data['TOD(ms)'],
+                            y=[1] * len(plot_data),
+                            mode='markers',
+                            marker=dict(size=4, color='steelblue', opacity=0.6),
+                            showlegend=False
+                        ))
+                    
+                    fig.update_layout(
+                        title='Pulse Distribution Over Time',
+                        xaxis_title='Time of Detection (ms)',
+                        yaxis_title='Emitter',
+                        height=400,
+                        template='plotly_white',
+                        hovermode='closest'
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Inter-pulse Interval Analysis
+                    st.markdown("#### 📊 Inter-Pulse Interval Distribution")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Histogram of intervals
+                        fig_hist = go.Figure()
+                        fig_hist.add_trace(go.Histogram(
+                            x=tod_diff,
+                            nbinsx=50,
+                            marker_color='steelblue',
+                            opacity=0.7
+                        ))
+                        fig_hist.update_layout(
+                            title='Inter-Pulse Interval Histogram',
+                            xaxis_title='Interval (ms)',
+                            yaxis_title='Count',
+                            height=350,
+                            template='plotly_white'
+                        )
+                        st.plotly_chart(fig_hist, use_container_width=True)
+                    
+                    with col2:
+                        # Box plot of intervals
+                        fig_box = go.Figure()
+                        fig_box.add_trace(go.Box(
+                            y=tod_diff,
+                            marker_color='coral',
+                            name='Intervals'
+                        ))
+                        fig_box.update_layout(
+                            title='Inter-Pulse Interval Distribution',
+                            yaxis_title='Interval (ms)',
+                            height=350,
+                            template='plotly_white',
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig_box, use_container_width=True)
+                    
+                    # Pulses per Emitter Over Time
+                    if 'Name' in pdw_data.columns:
+                        st.markdown("#### 📊 Pulse Activity by Emitter")
+                        
+                        # Create time bins
+                        n_bins = 50
+                        tod_min, tod_max = tod.min(), tod.max()
+                        bin_edges = np.linspace(tod_min, tod_max, n_bins + 1)
+                        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                        
+                        fig_activity = go.Figure()
+                        
+                        for name in sorted(pdw_data['Name'].unique()):
+                            name_tod = pdw_data[pdw_data['Name'] == name]['TOD(ms)']
+                            counts, _ = np.histogram(name_tod, bins=bin_edges)
+                            
+                            fig_activity.add_trace(go.Scatter(
+                                x=bin_centers,
+                                y=counts,
+                                mode='lines',
+                                name=name,
+                                line=dict(width=2),
+                                fill='tonexty' if name != sorted(pdw_data['Name'].unique())[0] else None
+                            ))
+                        
+                        fig_activity.update_layout(
+                            title='Pulse Activity Over Time by Emitter',
+                            xaxis_title='Time of Detection (ms)',
+                            yaxis_title='Pulse Count per Bin',
+                            height=400,
+                            template='plotly_white',
+                            hovermode='x unified'
+                        )
+                        
+                        st.plotly_chart(fig_activity, use_container_width=True)
+                else:
+                    st.warning("⚠️ TOD(ms) column not found in the dataset. Please regenerate the data with TOD column.")
+            
+            # Tab 3: Enhanced Data Analysis
+            with tab3:
+                st.markdown("### 📊 Comprehensive Column Analysis")
+                st.markdown(f"**Dataset Shape:** {pdw_data.shape[0]:,} rows × {pdw_data.shape[1]} columns")
+                
+                # Get all columns
+                all_columns = pdw_data.columns.tolist()
+                
+                # Column selector
+                selected_column = st.selectbox(
+                    "Select Column to Analyze",
+                    all_columns,
+                    key="analysis_column_selector"
+                )
+                
+                if selected_column:
+                    col_data = pdw_data[selected_column]
+                    
+                    # Check if categorical or numerical
+                    is_categorical = col_data.dtype == 'object' or col_data.nunique() < 20
+                    
+                    if is_categorical:
+                        # CATEGORICAL ANALYSIS
+                        st.markdown(f"#### 📋 {selected_column} (Categorical)")
+                        
+                        # Statistics
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Unique Values", col_data.nunique())
+                        with col2:
+                            st.metric("Most Common", col_data.mode()[0] if len(col_data.mode()) > 0 else "N/A")
+                        with col3:
+                            st.metric("Missing Values", col_data.isna().sum())
+                        with col4:
+                            st.metric("Total Count", len(col_data))
+                        
+                        # Value counts table
+                        st.markdown("##### Value Distribution")
+                        value_counts = col_data.value_counts()
+                        value_pcts = (value_counts / len(col_data) * 100).round(2)
+                        
+                        dist_df = pd.DataFrame({
+                            'Value': value_counts.index,
+                            'Count': value_counts.values,
+                            'Percentage': value_pcts.values
+                        })
+                        st.dataframe(dist_df, use_container_width=True)
+                        
+                        # Bar chart
+                        import plotly.graph_objects as go
+                        fig = go.Figure(data=[
+                            go.Bar(
+                                x=value_counts.index.astype(str),
+                                y=value_counts.values,
+                                marker_color='steelblue',
+                                text=value_counts.values,
+                                textposition='outside'
+                            )
+                        ])
+                        fig.update_layout(
+                            title=f"Distribution of {selected_column}",
+                            xaxis_title=selected_column,
+                            yaxis_title="Count",
+                            height=500,
+                            template="plotly_white"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                    else:
+                        # NUMERICAL ANALYSIS
+                        st.markdown(f"#### 📈 {selected_column} (Numerical)")
+                        
+                        # Clean data (remove NaN)
+                        clean_data = col_data.dropna()
+                        
+                        # Statistics - Row 1
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        with col1:
+                            st.metric("Count", f"{len(clean_data):,}")
+                        with col2:
+                            st.metric("Mean", f"{clean_data.mean():.4e}")
+                        with col3:
+                            st.metric("Median", f"{clean_data.median():.4e}")
+                        with col4:
+                            st.metric("Std Dev", f"{clean_data.std():.4e}")
+                        with col5:
+                            st.metric("Missing", col_data.isna().sum())
+                        
+                        # Statistics - Row 2
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        with col1:
+                            st.metric("Min", f"{clean_data.min():.4e}")
+                        with col2:
+                            st.metric("25th %ile", f"{clean_data.quantile(0.25):.4e}")
+                        with col3:
+                            st.metric("75th %ile", f"{clean_data.quantile(0.75):.4e}")
+                        with col4:
+                            st.metric("Max", f"{clean_data.max():.4e}")
+                        with col5:
+                            from scipy import stats as scipy_stats
+                            st.metric("Skewness", f"{scipy_stats.skew(clean_data):.4f}")
+                        
+                        # Detailed statistics table
+                        with st.expander("📊 Detailed Statistics"):
+                            percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+                            stats_data = {
+                                'Percentile': [f"{p}%" for p in percentiles],
+                                'Value': [clean_data.quantile(p/100) for p in percentiles]
+                            }
+                            stats_df = pd.DataFrame(stats_data)
+                            st.dataframe(stats_df, use_container_width=True)
+                        
+                        # Visualizations
+                        import plotly.graph_objects as go
+                        from plotly.subplots import make_subplots
+                        
+                        # Create 2x2 subplot
+                        fig = make_subplots(
+                            rows=2, cols=2,
+                            subplot_titles=('Histogram', 'Box Plot', 'Violin Plot', 'Cumulative Distribution'),
+                            specs=[[{"type": "histogram"}, {"type": "box"}],
+                                   [{"type": "violin"}, {"type": "scatter"}]]
+                        )
+                        
+                        # Histogram
+                        fig.add_trace(
+                            go.Histogram(x=clean_data, nbinsx=50, name='Histogram',
+                                        marker_color='steelblue', showlegend=False),
+                            row=1, col=1
+                        )
+                        
+                        # Box Plot
+                        fig.add_trace(
+                            go.Box(y=clean_data, name='Box Plot',
+                                  marker_color='coral', showlegend=False),
+                            row=1, col=2
+                        )
+                        
+                        # Violin Plot
+                        fig.add_trace(
+                            go.Violin(y=clean_data, name='Violin',
+                                     fillcolor='lightseagreen', showlegend=False),
+                            row=2, col=1
+                        )
+                        
+                        # Cumulative Distribution
+                        sorted_data = np.sort(clean_data)
+                        cumulative = np.arange(1, len(sorted_data) + 1) / len(sorted_data)
+                        fig.add_trace(
+                            go.Scatter(x=sorted_data, y=cumulative, mode='lines',
+                                      name='CDF', line=dict(color='purple', width=2),
+                                      showlegend=False),
+                            row=2, col=2
+                        )
+                        
+                        fig.update_layout(
+                            height=800,
+                            title_text=f"Statistical Analysis: {selected_column}",
+                            template="plotly_white",
+                            showlegend=False
+                        )
+                        
+                        fig.update_xaxes(title_text=selected_column, row=1, col=1)
+                        fig.update_xaxes(title_text="", row=1, col=2)
+                        fig.update_xaxes(title_text="", row=2, col=1)
+                        fig.update_xaxes(title_text=selected_column, row=2, col=2)
+                        
+                        fig.update_yaxes(title_text="Frequency", row=1, col=1)
+                        fig.update_yaxes(title_text=selected_column, row=1, col=2)
+                        fig.update_yaxes(title_text=selected_column, row=2, col=1)
+                        fig.update_yaxes(title_text="Cumulative Probability", row=2, col=2)
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                # Summary of all columns
+                with st.expander("📋 Summary of All Columns"):
+                    st.markdown("#### Quick Overview")
+                    summary_data = []
+                    for col in all_columns:
+                        col_info = {
+                            'Column': col,
+                            'Type': str(pdw_data[col].dtype),
+                            'Non-Null': pdw_data[col].notna().sum(),
+                            'Null': pdw_data[col].isna().sum(),
+                            'Unique': pdw_data[col].nunique()
+                        }
+                        
+                        if pdw_data[col].dtype in ['int64', 'float64']:
+                            col_info['Mean'] = f"{pdw_data[col].mean():.4e}"
+                            col_info['Std'] = f"{pdw_data[col].std():.4e}"
+                            col_info['Min'] = f"{pdw_data[col].min():.4e}"
+                            col_info['Max'] = f"{pdw_data[col].max():.4e}"
+                        else:
+                            col_info['Mean'] = 'N/A'
+                            col_info['Std'] = 'N/A'
+                            col_info['Min'] = 'N/A'
+                            col_info['Max'] = 'N/A'
+                        
+                        summary_data.append(col_info)
+                    
+                    summary_df = pd.DataFrame(summary_data)
+                    st.dataframe(summary_df, use_container_width=True)
+                
+                # Type Distributions by Name (if applicable)
+                if 'Name' in all_columns and ('FreqType' in all_columns or 'PriType' in all_columns):
+                    with st.expander("🔗 Type Distributions by Name"):
+                        st.markdown("#### Correlation between Name and Type Columns")
+                        st.markdown("This section shows how FreqType and PriType are distributed across different Name values.")
+                        
+                        import plotly.graph_objects as go
+                        from plotly.subplots import make_subplots
+                        
+                        # FreqType analysis
+                        if 'FreqType' in all_columns:
+                            st.markdown("##### FreqType Distribution by Name")
+                            
+                            # Create crosstab
+                            freq_crosstab = pd.crosstab(pdw_data['Name'], pdw_data['FreqType'], normalize='index') * 100
+                            freq_crosstab_counts = pd.crosstab(pdw_data['Name'], pdw_data['FreqType'])
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown("**Percentage Distribution**")
+                                st.dataframe(freq_crosstab.round(2), use_container_width=True)
+                            
+                            with col2:
+                                st.markdown("**Count Distribution**")
+                                st.dataframe(freq_crosstab_counts, use_container_width=True)
+                            
+                            # Stacked bar chart
+                            fig = go.Figure()
+                            
+                            for freq_type in freq_crosstab.columns:
+                                fig.add_trace(go.Bar(
+                                    name=freq_type,
+                                    x=freq_crosstab.index,
+                                    y=freq_crosstab[freq_type],
+                                    text=freq_crosstab[freq_type].round(1),
+                                    textposition='inside',
+                                    texttemplate='%{text}%'
+                                ))
+                            
+                            fig.update_layout(
+                                barmode='stack',
+                                title='FreqType Distribution by Name (%)',
+                                xaxis_title='Name',
+                                yaxis_title='Percentage',
+                                height=400,
+                                template='plotly_white',
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        # PriType analysis
+                        if 'PriType' in all_columns:
+                            st.markdown("##### PriType Distribution by Name")
+                            
+                            # Create crosstab
+                            pri_crosstab = pd.crosstab(pdw_data['Name'], pdw_data['PriType'], normalize='index') * 100
+                            pri_crosstab_counts = pd.crosstab(pdw_data['Name'], pdw_data['PriType'])
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown("**Percentage Distribution**")
+                                st.dataframe(pri_crosstab.round(2), use_container_width=True)
+                            
+                            with col2:
+                                st.markdown("**Count Distribution**")
+                                st.dataframe(pri_crosstab_counts, use_container_width=True)
+                            
+                            # Stacked bar chart
+                            fig = go.Figure()
+                            
+                            for pri_type in pri_crosstab.columns:
+                                fig.add_trace(go.Bar(
+                                    name=pri_type,
+                                    x=pri_crosstab.index,
+                                    y=pri_crosstab[pri_type],
+                                    text=pri_crosstab[pri_type].round(1),
+                                    textposition='inside',
+                                    texttemplate='%{text}%'
+                                ))
+                            
+                            fig.update_layout(
+                                barmode='stack',
+                                title='PriType Distribution by Name (%)',
+                                xaxis_title='Name',
+                                yaxis_title='Percentage',
+                                height=400,
+                                template='plotly_white',
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Combined heatmap if both exist
+                        if 'FreqType' in all_columns and 'PriType' in all_columns:
+                            st.markdown("##### Combined Type Analysis")
+                            
+                            # Create a combined crosstab
+                            combined = pd.crosstab([pdw_data['Name'], pdw_data['FreqType']], 
+                                                  pdw_data['PriType'], 
+                                                  normalize='index') * 100
+                            
+                            st.markdown("**PriType Distribution by Name and FreqType (%)**")
+                            st.dataframe(combined.round(2), use_container_width=True)
+            
+            # Tab 4: Raw Data
+            with tab4:
                 st.dataframe(pdw_data)
                 st.text(f"Current file: {os.path.basename(pdw_path)}")
                 
@@ -185,6 +663,8 @@ def display_output(system_config):
                     
         except Exception as e:
             st.error(f"Error reading PDW data: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
             if st.button("Run New Simulation", key="run_sim_after_error"):
                 new_file = run_simulation(system_config)
                 if new_file:
@@ -204,6 +684,47 @@ def main():
     apply_custom_styles()         # Call this second  # Apply your styles from styles.py
 
     st.title("Pulse Descriptor Word Simulator")
+    
+    # Add welcome message with workflow explanation
+    with st.expander("📖 How to Use This System", expanded=False):
+        st.markdown("""
+        ### Two Workflows Available:
+        
+        #### 🎯 Option 1: Pre-Generated Data (Recommended)
+        **Best for:** Analysis, visualization, and working with realistic datasets
+        
+        1. Generate data using the command line:
+           ```bash
+           conda activate us_ml
+           python generate_enhanced_data.py --rows 60000 --emitters 7
+           ```
+        2. The generated files will be automatically loaded in the visualization tabs
+        3. Navigate to the tabs above to analyze the data
+        
+        **Benefits:**
+        - ✅ Fast generation (30-40 seconds for 60K rows)
+        - ✅ Matches original dataset statistics
+        - ✅ Includes TOD column with realistic timing
+        - ✅ 7 emitters by default (S1, T, J, S4, F, S3, S2)
+        
+        #### ⚙️ Option 2: Custom Simulation
+        **Best for:** Specific scenarios, custom radar configurations
+        
+        1. Use the navigation below to configure scenario and radars
+        2. Set number of radars (default: 7)
+        3. Configure each radar's parameters
+        4. Run simulation to generate PDW data
+        
+        **Benefits:**
+        - ✅ Full control over radar parameters
+        - ✅ Custom scenarios and geometries
+        - ✅ Flexible configuration
+        
+        ---
+        
+        **💡 Tip:** For most analysis tasks, use Option 1 (pre-generated data). It's faster and maintains statistical accuracy!
+        """)
+
 
     # 1) Load system config
     system_config = load_system_config()
@@ -305,22 +826,43 @@ def main():
 
     # -- PAGE 1: Number of Radars
     elif st.session_state.page == 1:
-        st.header("Select Number of Radars")
+        st.header("Select Number of Radars (Emitters)")
+        
+        # Add helpful information
+        st.info("""
+        **ℹ️ Two Ways to Use This System:**
+        
+        1. **Pre-Generated Data** (Recommended for analysis):
+           - Use `generate_enhanced_data.py` to create datasets with 7 emitters (matching original data)
+           - Load the generated CSV/Excel file for visualization
+           - Faster and maintains statistical accuracy
+        
+        2. **Custom Simulation** (For specific scenarios):
+           - Configure radars here and run simulation
+           - Generates data based on your radar parameters
+           - More flexible but requires configuration
+        
+        **Note:** If you're using pre-generated data, the number of emitters is already set in the dataset.
+        """)
 
         current_num = len(st.session_state.config.get('radars', []))
+        # Default to 7 radars (matching the 7 emitters in original dataset)
+        default_radars = 7 if current_num == 0 else current_num
+        
         num_radars = st.number_input(
-            'Number of Radars',
+            'Number of Radars (Emitters)',
             min_value=1,
             max_value=20,
-            value=current_num,
+            value=default_radars,
             step=1,
-            key="radar_count"
+            key="radar_count",
+            help="Default is 7 to match the original dataset (S1, T, J, S4, F, S3, S2)"
         )
 
         def set_num_radars():
             """
             1) Load fresh from base_config
-            2) Slice to user-specified number
+            2) Create requested number of radars (duplicating template if needed)
             3) Overwrite st.session_state.config
             4) Save to temp config
             """
@@ -329,11 +871,50 @@ def main():
             base_radars = base_conf.get('radars', [])
             base_sensors = base_conf.get('sensors', [])
 
-            slice_count = min(num_radars, len(base_radars))
+            # Create the requested number of radars
+            new_radars = []
+            for i in range(num_radars):
+                if i < len(base_radars):
+                    # Use existing radar from base config
+                    new_radars.append(copy.deepcopy(base_radars[i]))
+                else:
+                    # Create new radar by duplicating the first radar template
+                    if base_radars:
+                        template = copy.deepcopy(base_radars[0])
+                        template['name'] = f'Radar{i + 1}'
+                        # Offset position slightly to avoid overlap
+                        template['start_position'] = [
+                            template['start_position'][0] + (i * 50),
+                            template['start_position'][1] + (i * 50)
+                        ]
+                        new_radars.append(template)
+                    else:
+                        # Fallback: create a minimal radar config
+                        new_radars.append({
+                            'name': f'Radar{i + 1}',
+                            'power': 1000.0,
+                            'start_position': [i * 100, i * 100],
+                            'velocity': [0, 0],
+                            'start_time': 0.0,
+                            'rotation_type': 'constant',
+                            'rotation_params': {'t0': 0.0, 'alpha0': 0.0, 'T_rot': 2.5},
+                            'pri_type': 'fixed',
+                            'pri_params': {'pri': 0.001},
+                            'frequency_type': 'fixed',
+                            'frequency_params': {'frequency': 1.5e9},
+                            'pulse_width_type': 'fixed',
+                            'pulse_width_params': {'pulse_width': 2.62e-4},
+                            'lobe_pattern': {
+                                'type': 'Sinc',
+                                'main_lobe_opening_angle': 5.0,
+                                'radar_power_at_main_lobe': 0.0,
+                                'radar_power_at_back_lobe': -20.0
+                            }
+                        })
 
             new_conf = {}
             new_conf['scenario'] = copy.deepcopy(base_scenario)
-            new_conf['radars'] = copy.deepcopy(base_radars[:slice_count])
+            new_conf['radars'] = new_radars
             if base_sensors:
                 new_conf['sensors'] = [base_sensors[0]]
             else:

@@ -11,7 +11,7 @@ directories:
 # File paths and naming
 files:
   pdw_data:
-    directory: "${directories.output}/pdw_data"
+    directory: "./output/pdw_data"
     base_name: "pdw_"
     extension: ".csv"
     use_uuid: true
@@ -19,14 +19,14 @@ files:
     max_history: 10 # Maximum number of historical files to keep
 
   metadata:
-    directory: "${directories.output}/metadata"
+    directory: "./output/metadata"
     base_name: "pdw_metadata_"
     extension: ".csv"
     use_uuid: true
     preserve_history: true
 
   timing_reports:
-    directory: "${directories.output}/timing"
+    directory: "./output/timing"
     base_name: "simulation_timing_"
     extension: ".yaml"
     use_uuid: true

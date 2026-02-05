@@ -37,17 +37,22 @@ def calculate_trajectory(start_position, end_time, time_step, velocity=None, sta
     :param time_step: Time step for trajectory calculation in seconds
     :param velocity: Optional - Velocity [vx, vy] in meters per second for moving objects
     :param start_time: Optional - Start time in seconds for moving objects
-    :return: List of [time, x, y] points
+    :return: Dictionary of numpy arrays: times, x, y
     """
-    trajectory = []
-    current_time = start_time if start_time is not None else 0
+    times = np.arange(start_time if start_time is not None else 0, end_time + time_step, time_step)
+    x = np.zeros_like(times)
+    y = np.zeros_like(times)
     
-    while current_time <= end_time:
-        position = move_straight_line(start_position, current_time, velocity, start_time)
-        trajectory.append([current_time, position[0].magnitude, position[1].magnitude])
-        current_time += time_step
+    for i, t in enumerate(times):
+        pos = move_straight_line(start_position, t, velocity, start_time)
+        x[i] = pos[0].magnitude
+        y[i] = pos[1].magnitude
     
-    return trajectory
+    return {
+        'times': times,
+        'x': x,
+        'y': y
+    }
 
 # Export the unit registry so it can be imported in other files
 def get_unit_registry():

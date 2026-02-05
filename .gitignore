@@ -1,0 +1,41 @@
+# ======================
+# Python
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# ======================
+# IDEs
+# ======================
+.vscode/
+
+# ======================
+# Outputs & generated data
+# ======================
+output/
+generated_datasets/
+analysis_plots/
+comparison_plots/
+final_comparison_plots/
+enhanced_comparison_plots/
+
+# ======================
+# Temporary & archives
+# ======================
+archived/
+temp/
+*.log
+
+# ======================
+# Data files (do not commit)
+# ======================
+*.csv
+*.xlsx
+*.html
+
+# ======================
+# Environment
+# ======================
+.env

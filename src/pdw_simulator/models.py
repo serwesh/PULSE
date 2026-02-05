@@ -3,6 +3,8 @@ from pdw_simulator.scenario_geometry_functions import calculate_trajectory, get_
 from pdw_simulator.radar_properties import *
 from pdw_simulator.sensor_properties import *
 
+ureg = get_unit_registry()
+
 class Scenario:
     def __init__(self, config):
         self.start_time = config['start_time'] * ureg.second
@@ -31,8 +33,8 @@ class Radar:
         self.rotation_type = config['rotation_type']
         self.rotation_params = config['rotation_params']
         self.rotation_data = None
-        self.current_angle = self.rotation_params['alpha0']
-        self.current_period = self.rotation_params['T_rot'] * ureg.second
+        self.current_angle = np.deg2rad(self.rotation_params.get('alpha0', 0.0))
+        self.current_period = self.rotation_params.get('T_rot', 1.0) * ureg.second
         # self.frequency = config['frequency'] * ureg.hertz
         # self.pulse_width = config['pulse_width'] * ureg.second
         self.power = config['power'] * ureg.dBm
@@ -75,6 +77,34 @@ class Radar:
             return self.pulse_times[next_pulse_index] * ureg.second
         return None
 
+    def get_pri_for_pulse(self, pulse_time):
+        """
+        Get the PRI for the given pulse time.
+        
+        :param pulse_time: Time of the pulse
+        :return: PRI value or 0 if first pulse
+        """
+        if self.pulse_times is None:
+            return 0.0 * ureg.second
+            
+        # Ensure pulse_time is a magnitude if it's a Quantity
+        if hasattr(pulse_time, 'magnitude'):
+            time_val = pulse_time.magnitude
+        else:
+            time_val = pulse_time
+            
+        # Find index with tolerance for floating point comparison
+        idx = np.searchsorted(self.pulse_times, time_val)
+        
+        # Check if we found the exact time (within tolerance)
+        if idx < len(self.pulse_times) and np.isclose(self.pulse_times[idx], time_val):
+            if idx > 0:
+                return (self.pulse_times[idx] - self.pulse_times[idx-1]) * ureg.second
+            else:
+                return 0.0 * ureg.second
+        
+        return 0.0 * ureg.second
+
     def get_current_frequency(self):
         """
         Get the current frequency of the radar.
@@ -101,12 +131,23 @@ class Radar:
         if self.pulse_widths is None:
             return None
         true_pw=self.pulse_widths[0].astype(float)
-        print(true_pw)
         return true_pw * ureg.second
     
     def calculate_power_at_angle(self, theta):
         if self.lobe_pattern_type == 'Sinc':
-            power = sinc_lobe_pattern(theta, self.theta_ml, self.P_ml, self.P_bl)
+            # theta is absolute geometric angle (Quantity with units, usually radians)
+            # self.current_angle is antenna boresight orientation (float magnitude in radians)
+            theta_rad = theta.to(ureg.radian).magnitude
+            rel_theta_mag = theta_rad - self.current_angle
+            
+            # Normalize to [-pi, pi]
+            rel_theta_mag = (rel_theta_mag + np.pi) % (2 * np.pi) - np.pi
+            
+            # Create Quantity for sinc_lobe_pattern which expects it
+            rel_theta = rel_theta_mag * ureg.radian
+            
+            power = sinc_lobe_pattern(rel_theta, self.theta_ml, self.P_ml, self.P_bl)
+            
             if hasattr(power,'units') and power.units==ureg.dB:
                 power=power.magnitude*ureg.dBm
             return power
@@ -214,17 +255,27 @@ class Radar:
         self.update_rotation(current_time)
 
     def update_position(self, current_time):
-        if self.trajectory is not None:
-            idx = np.searchsorted([t[0] for t in self.trajectory], current_time.magnitude)
-            if idx < len(self.trajectory):
-                self.current_position = np.array([self.trajectory[idx][1], self.trajectory[idx][2]]) * ureg.meter
+        """
+        Update the current position of the radar based on time.
+        """
+        if self.trajectory is None:
+            return
+        
+        idx = np.searchsorted(self.trajectory['times'], current_time.magnitude)
+        idx = min(idx, len(self.trajectory['times']) - 1)
+        self.current_position = np.array([self.trajectory['x'][idx], self.trajectory['y'][idx]]) * ureg.meter
 
     def update_rotation(self, current_time):
-        if self.rotation_data is not None:
-            idx = np.searchsorted([t[0] for t in self.rotation_data], current_time.magnitude)
-            if idx < len(self.rotation_data):
-                self.current_angle = self.rotation_data[idx][1]
-                self.current_period = self.rotation_data[idx][2] * ureg.second
+        """
+        Update the current rotation angle of the radar based on time.
+        """
+        if self.rotation_data is None:
+            return
+        
+        idx = np.searchsorted(self.rotation_data['times'], current_time.magnitude)
+        idx = min(idx, len(self.rotation_data['times']) - 1)
+        self.current_angle = self.rotation_data['angles'][idx]
+        self.current_period = self.rotation_data['periods'][idx]
 
     def get_current_angle(self):
         return self.current_angle * ureg.radian
@@ -251,7 +302,7 @@ class Sensor:
         # self.saturation_level = config['saturation_level'] * ureg.dB
         # self.detection_levels = np.array(config['detection_probability']['level']) * ureg.dB
         # self.detection_probabilities = np.array(config['detection_probability']['probability']) / 100
-        self.detection_levels = [level * ureg.dB for level in config['detection_probability']['level']]
+        self.detection_levels = [level * ureg.dBm for level in config['detection_probability']['level']]
         self.detection_probabilities = [prob / 100 for prob in config['detection_probability']['probability']]
         self.freq_padding_factor = config.get('freq_padding_factor', 4)
         # Error models
@@ -295,7 +346,9 @@ class Sensor:
 
     def update_position(self, current_time):
         self.current_time = current_time
-        if self.trajectory is not None:
-            idx = np.searchsorted([t[0] for t in self.trajectory], current_time.magnitude)
-            if idx < len(self.trajectory):
-                self.current_position = np.array([self.trajectory[idx][1], self.trajectory[idx][2]]) * ureg.meter
+        if self.trajectory is None:
+            return
+        
+        idx = np.searchsorted(self.trajectory['times'], current_time.magnitude)
+        idx = min(idx, len(self.trajectory['times']) - 1)
+        self.current_position = np.array([self.trajectory['x'][idx], self.trajectory['y'][idx]]) * ureg.meter
